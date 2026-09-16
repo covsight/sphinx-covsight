@@ -47,6 +47,15 @@ dev = [
 [project.scripts]
 covsight-testplan = "sphinx_covsight.cli:main"
 
+# Discovered by IVPM's agents handler, which links the bundled authoring skills
+# into .agents/skills/ (and the .claude/.cursor mirrors) of any project that
+# depends on this package.  One entry point per skill: the handler names each
+# link after the entry point rather than after the skill's frontmatter, so a
+# single entry point returning both would yield 'sphinx-covsight-2'.
+[project.entry-points."agent.skills"]
+sphinx-covsight-plan = "sphinx_covsight.skills:plan_skill_dir"
+sphinx-covsight-spec = "sphinx_covsight.skills:spec_skill_dir"
+
 [project.urls]
 Homepage = "https://github.com/covsight/sphinx-covsight"
 Documentation = "https://dvkit.org/covsight/sphinx-covsight/"

@@ -7,6 +7,7 @@ what keeps the documentation honest.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -148,6 +149,76 @@ def test_example_exercises_every_citation_backend(system):
 
     walk(golden["goals"])
     assert system in systems
+
+
+def test_the_example_rtl_and_testbench_elaborate():
+    """The example's SystemVerilog is real source, not a sketch.
+
+    A design that does not elaborate would still render perfectly well on the
+    plan's pages, and every ``sv:`` citation in the plan would still resolve --
+    the documentation extension parses declarations and never builds a
+    hierarchy. This is the only thing standing between the example and
+    collateral that merely looks like it compiles.
+    """
+    pyslang = pytest.importorskip("pyslang")
+
+    sources = sorted(str(p) for p in (EXAMPLE / "rtl").glob("*.sv"))
+    sources += sorted(str(p) for p in (EXAMPLE / "verif").glob("*.sv"))
+    assert sources, "no SystemVerilog found; did the example move?"
+
+    driver = pyslang.driver.Driver()
+    driver.addStandardArgs()
+    assert driver.parseCommandLine(" ".join(["slang", "--top", "uart_tb", *sources]))
+    assert driver.parseAllSources()
+
+    compilation = driver.createCompilation()
+    engine = pyslang.DiagnosticEngine(driver.sourceManager)
+    client = pyslang.TextDiagnosticClient()
+    engine.addClient(client)
+    for diagnostic in compilation.getAllDiagnostics():
+        engine.issue(diagnostic)
+    # Warnings too: an example is read as a model of how to write the thing, so
+    # it does not get to ship with the sloppiness a real project tolerates.
+    assert client.getString() == ""
+
+
+def test_every_test_named_in_the_plan_exists_in_the_testbench():
+    """A plan naming a test nobody wrote reads exactly like one that does.
+
+    ``covsight.testpoint-unmapped`` catches a testpoint with *no* tests. Nothing
+    in the extension can catch a testpoint whose tests are fictional, because
+    the extension has no idea what a test is -- ``tests`` bodies are opaque
+    strings to it, by design, so that a plan can be written before the
+    testbench exists. Past that point the correspondence has to be checked
+    somewhere, and for this example it is checked here.
+    """
+    golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
+
+    named: set[str] = set()
+
+    def walk(goals):
+        for goal in goals:
+            for tp in goal.get("testpoints", []):
+                named.update(tp.get("tests", []))
+            walk(goal.get("goals", []))
+
+    walk(golden["goals"])
+    assert named, "the plan names no tests at all; did the schema change?"
+
+    # Both trees: the formal environment's "tests" are property sets, which are
+    # modules in the design tree rather than classes in the testbench.
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for directory in ("rtl", "verif")
+        for path in sorted((EXAMPLE / directory).glob("*.sv"))
+    )
+
+    missing = [
+        name
+        for name in sorted(named)
+        if not re.search(rf"^\s*(?:class|module)\s+{re.escape(name)}\b", source, re.MULTILINE)
+    ]
+    assert missing == [], f"named in the plan, absent from the source: {missing}"
 
 
 def test_example_extracts_without_the_optional_extensions(tmp_path, monkeypatch):

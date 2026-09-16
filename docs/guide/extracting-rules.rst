@@ -55,7 +55,10 @@ resolved citation lands in the plan as:
 
    {"system": "spec",
     "item_id": "UART_3_2_1",
-    "url": "https://uart-spec.example/uart.html#UART_3_2_1"}
+    "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_3_2_1"}
+
+That url is not illustrative.  It is where this example's specification is
+published, and following it lands on the rule itself.
 
 Pinned copy, or fetched artifact?
 ---------------------------------

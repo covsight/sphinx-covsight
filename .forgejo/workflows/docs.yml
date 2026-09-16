@@ -65,18 +65,25 @@ jobs:
           echo "OK: no internal identifiers in tracked files"
 
       - name: Install
-        # docs/conf.py loads exactly one extension, the local `covsight_docs`,
-        # which imports sphinx_covsight to generate the configuration, directive
-        # and warning references from the code. So the package itself plus the
-        # theme is the whole dependency set -- the optional citation backends
-        # are not needed to document them.
+        # The published site is THREE Sphinx projects (see docs/build.sh): this
+        # package's documentation, plus the example specification and the
+        # example plan nested under it. The main docs alone would need only the
+        # package and the theme, but the example plan really does use MyST,
+        # sphinx-needs, sphinx-systemverilog and sphinx-peakrdl -- that is the
+        # point of it -- so the full `docs` extra is required here.
         run: |
           python3 -m venv /tmp/docsenv
           /tmp/docsenv/bin/pip install -q --upgrade pip
-          /tmp/docsenv/bin/pip install -q . furo
+          /tmp/docsenv/bin/pip install -q ".[docs]"
 
       - name: Build HTML docs
-        run: /tmp/docsenv/bin/python -m sphinx -W --keep-going -b html docs docs/_build/html
+        # Via the script, not a bare sphinx-build: the main docs link into the
+        # two sub-builds with relative hrefs that Sphinx neither resolves nor
+        # checks, so building only the main project deploys a doc set whose
+        # example links are dead. The script is also what a contributor runs, so
+        # CI and a laptop cannot disagree about what "the docs" means.
+        run: |
+          PATH=/tmp/docsenv/bin:$PATH docs/build.sh docs/_build/html
 
       - name: Sanity-check the build
         # Sphinx exits 0 on a build that produced almost nothing, and an empty
@@ -88,7 +95,54 @@ jobs:
             || { echo "::error::no index.html in the build output"; exit 1; }
           n=$(find docs/_build/html -name '*.html' | wc -l)
           echo "generated pages: $n"
-          [ "$n" -ge 8 ] || { echo "::error::only $n pages built; expected 9. Refusing to call this a doc set."; exit 1; }
+          [ "$n" -ge 30 ] || { echo "::error::only $n pages built; expected 36 (main docs + both example projects). Refusing to call this a doc set."; exit 1; }
+          # The two example projects are separate Sphinx builds nested under the
+          # main one. A failure there does not fail the main build, and the page
+          # count above is dominated by the generated register HTML, so check
+          # for them by name.
+          for page in example/spec/uart.html example/plan/feat_baud.html \
+                      example/plan/design.html example/plan/testbench.html \
+                      example/plan/testplan.json ; do
+            test -s "docs/_build/html/$page" \
+              || { echo "::error::$page missing; the example did not build into the site"; exit 1; }
+          done
+          # Citations in the published artifact are absolute urls into this same
+          # site, so a renamed spec page rots every one of them silently. Map
+          # them back onto the build output and confirm the targets are there.
+          /tmp/docsenv/bin/python - <<'PY'
+          import json, pathlib, sys
+          BASE = "https://dvkit.org/covsight/sphinx-covsight/"
+          site = pathlib.Path("docs/_build/html")
+          plan = json.loads((site / "example/plan/testplan.json").read_text())
+          missing, checked = [], 0
+          def walk(goals):
+              global checked
+              for goal in goals:
+                  reqs = list(goal.get("custom", {}).get("covsight", {}).get("requirements", []))
+                  for tp in goal.get("testpoints", []):
+                      reqs += tp.get("requirements", [])
+                  for req in reqs:
+                      url = req.get("url", "")
+                      if not url.startswith(BASE):
+                          continue
+                      checked += 1
+                      target, _, fragment = url[len(BASE):].partition("#")
+                      page = site / target
+                      # The anchor is the half that rots silently: a renumbered
+                      # rule leaves the page in place and the link still 200s.
+                      if not page.is_file() or (
+                          fragment and f'id="{fragment}"' not in page.read_text()
+                      ):
+                          missing.append(url)
+                  walk(goal.get("goals", []))
+          walk(plan["goals"])
+          if missing:
+              sys.exit("::error::published citation urls point at pages that do not exist: "
+                       + ", ".join(sorted(set(missing))))
+          if not checked:
+              sys.exit("::error::no published citation urls found; covsight_spec_base_url changed?")
+          print(f"OK: {checked} published citation url(s) resolve into the site")
+          PY
           # The two reference pages are GENERATED from CONFIG_VALUES, DIRECTIVES
           # and SUBTYPES. They are the part that can come out empty while the
           # build still succeeds, so check them by content rather than trusting

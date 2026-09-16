@@ -16,6 +16,7 @@ only decisions.
 feat_framing
 feat_baud
 registers
+design
 testbench
 ```
 

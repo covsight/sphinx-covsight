@@ -154,9 +154,6 @@ jobs:
                        "from the specification build")
           PY
 
-      - name: Build the example plan
-        run: sphinx-build -W -b html docs/example/plan _build/plan
-
       - name: The committed plan matches a fresh extraction
         run: covsight-testplan check docs/example/plan --against docs/example/_golden/testplan.json
 
@@ -173,7 +170,11 @@ jobs:
           cmp _build/serial/testplan.json _build/parallel/testplan.json
 
       - name: Build the documentation
-        run: sphinx-build -W -b html docs _build/docs
+        # The whole published site: this package's docs plus the two example
+        # projects nested under them. Same script .forgejo/workflows/docs.yml
+        # publishes from, so a break shows up here first. It builds the example
+        # plan strictly too, which is why there is no separate step for that.
+        run: docs/build.sh _build/site
 
   # --------------------------------------------------------------- build ----
   build:

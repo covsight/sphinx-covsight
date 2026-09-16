@@ -21,6 +21,13 @@ reviewer reading a diff of the plan sees only decisions.
 
 .. toctree::
    :maxdepth: 2
+   :caption: The worked example
+
+   example/index
+   example/traceability
+
+.. toctree::
+   :maxdepth: 2
    :caption: Reference
 
    reference/directives
@@ -82,6 +89,16 @@ writing the plan                         :doc:`guide/writing-a-plan`
 consuming the extracted plan             :doc:`guide/extracting-a-testplan`
 ======================================  ===============================================
 
-The worked example every guide quotes lives in ``docs/example/``: a miniature
-UART specification, its register map, its testbench collateral, and the plan
-that cites all three.
+The worked example
+------------------
+
+Every snippet in these guides is quoted from one worked example — a miniature
+UART — rather than written for the page, so nothing here can drift from
+something that builds.  It is two Sphinx projects, because that is the topology
+the extension assumes, and both are published alongside this documentation.
+
+:doc:`example/index` is the tour, and :doc:`example/traceability` follows a
+single specification rule through every representation it has: the rule, the
+register field that implements it, the feature accountable for it, the
+testpoint, the tests, the coverage that closes it, and the extracted artifact
+entry that ties them together.

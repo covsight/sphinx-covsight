@@ -28,7 +28,10 @@ _here = os.path.dirname(__file__)
 peakrdl_input_files = [os.path.join(_here, "..", "rtl", "uart_regs.rdl")]
 peakrdl_default_link_to = "doc"
 
-sv_source_dirs = ["../rtl"]
+# The design and the testbench are both parsed, because the plan refers to
+# both: `sv:` citations name testbench declarations, and the design pages are
+# what a reviewer follows a rule down into.
+sv_source_dirs = ["../rtl", "../verif"]
 sv_doc_style = "native"
 
 # ── the plan ─────────────────────────────────────────────────────────────────
@@ -40,7 +43,12 @@ covsight_plan_owner = "uart-verification"
 # A pinned copy of the specification's published needs.json.  Pinning rather
 # than fetching is the trade-off discussed in docs/guide/extracting-rules.rst.
 covsight_needs_json = "_spec/needs.json"
-covsight_spec_base_url = "https://uart-spec.example/"
+
+# Where the specification is PUBLISHED, which is not where it is built.  Both
+# projects are built by docs/build.sh into the sphinx-covsight documentation, so
+# this is a real location and every rule: citation in the extracted testplan
+# resolves to a live page.  Point it at your own published specification.
+covsight_spec_base_url = "https://dvkit.org/covsight/sphinx-covsight/example/spec/"
 
 covsight_substitutions = {"baud": ["9600", "115200", "460800"]}
 
@@ -86,4 +94,32 @@ covsight_output = "testplan.json"
 covsight_output_format = "both"
 
 exclude_patterns = ["_build", "_spec"]
+
+# ── how this renders in the published site ───────────────────────────────────
+#
+# See the matching block in ../spec/conf.py.  This project is built into
+# ``example/plan/``, and the extracted artifact lands beside it as
+# ``testplan.json`` -- the plan you read and the plan a tool consumes, at two
+# urls one directory apart.
+html_title = "UART Verification Plan"
+
 html_theme = "alabaster"
+try:
+    import furo  # noqa: F401
+
+    html_theme = "furo"
+    # ABSOLUTE urls, not relative ones.  The announcement is injected into
+    # every page of the build, including the generated source-listing pages,
+    # which sit a directory deeper than the rest -- a relative href is correct
+    # on some pages and broken on others, and Sphinx checks neither.
+    html_theme_options = {
+        "announcement": (
+            "The worked example that ships with "
+            '<a href="https://dvkit.org/covsight/sphinx-covsight/">'
+            "sphinx-covsight</a> &mdash; extracted to "
+            '<a href="https://dvkit.org/covsight/sphinx-covsight/example/plan/'
+            'testplan.json">testplan.json</a> by this very build.'
+        ),
+    }
+except ImportError:  # pragma: no cover - the example still builds unthemed
+    pass

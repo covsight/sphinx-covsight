@@ -64,7 +64,20 @@ covsight-testplan build plan/ -o testplan.json
 covsight-testplan check plan/ --against testplan.json
 ```
 
-See `docs/` for the full guides, and `docs/example/` for a worked project.
+See the [guides](https://dvkit.org/covsight/sphinx-covsight/) for the full
+documentation.  Every snippet in them is quoted from one worked example — a
+miniature UART — which is published alongside them as the two projects it
+really is: the
+[specification](https://dvkit.org/covsight/sphinx-covsight/example/spec/) and
+the [plan](https://dvkit.org/covsight/sphinx-covsight/example/plan/) that cites
+it, with the
+[extracted testplan](https://dvkit.org/covsight/sphinx-covsight/example/plan/testplan.json)
+next door to the plan it came from.  The
+[design](https://dvkit.org/covsight/sphinx-covsight/example/plan/design.html) and
+[testbench](https://dvkit.org/covsight/sphinx-covsight/example/plan/testbench.html)
+are real source, elaborated by the test suite, so every citation in the example
+has something on the other end of it.  The source is in `docs/example/`; build
+the whole site with `docs/build.sh`.
 
 ## Licence
 

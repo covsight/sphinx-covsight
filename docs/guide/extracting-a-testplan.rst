@@ -74,7 +74,7 @@ lands in the goal for its environment:
              "source_template": "uart_baud_{baud}_test, uart_baud_random_test",
              "requirements": [
                {"system": "spec", "item_id": "UART_3_2_1",
-                "url": "https://uart-spec.example/uart.html#UART_3_2_1"}
+                "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_3_2_1"}
              ],
              "coverage": [
                {"type": "covergroup", "path": "uart_env.uart_cfg_cg"}

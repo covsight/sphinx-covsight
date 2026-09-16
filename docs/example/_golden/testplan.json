@@ -9,17 +9,17 @@
             {
               "item_id": "UART_1_1_1",
               "system": "spec",
-              "url": "https://uart-spec.example/uart.html#UART_1_1_1"
+              "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_1_1_1"
             },
             {
               "item_id": "UART_1_1_2",
               "system": "spec",
-              "url": "https://uart-spec.example/uart.html#UART_1_1_2"
+              "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_1_1_2"
             },
             {
               "item_id": "UART_1_1_3",
               "system": "spec",
-              "url": "https://uart-spec.example/uart.html#UART_1_1_3"
+              "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_1_1_3"
             }
           ]
         }
@@ -70,7 +70,7 @@
                 {
                   "item_id": "UART_1_1_1",
                   "system": "spec",
-                  "url": "https://uart-spec.example/uart.html#UART_1_1_1"
+                  "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_1_1_1"
                 }
               ],
               "stage": "V1",
@@ -112,12 +112,12 @@
                 {
                   "item_id": "UART_1_2_1",
                   "system": "spec",
-                  "url": "https://uart-spec.example/uart.html#UART_1_2_1"
+                  "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_1_2_1"
                 },
                 {
                   "item_id": "UART_1_2_2",
                   "system": "spec",
-                  "url": "https://uart-spec.example/uart.html#UART_1_2_2"
+                  "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_1_2_2"
                 },
                 {
                   "item_id": "uart_pkg::uart_cfg::uart_cfg_cg",
@@ -165,7 +165,7 @@
                 {
                   "item_id": "UART_1_1_3",
                   "system": "spec",
-                  "url": "https://uart-spec.example/uart.html#UART_1_1_3"
+                  "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_1_1_3"
                 }
               ],
               "stage": "V2",
@@ -197,12 +197,12 @@
             {
               "item_id": "UART_3_2_1",
               "system": "spec",
-              "url": "https://uart-spec.example/uart.html#UART_3_2_1"
+              "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_3_2_1"
             },
             {
               "item_id": "UART_3_2_2",
               "system": "spec",
-              "url": "https://uart-spec.example/uart.html#UART_3_2_2"
+              "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_3_2_2"
             }
           ]
         }
@@ -253,12 +253,12 @@
                 {
                   "item_id": "UART_3_2_1",
                   "system": "spec",
-                  "url": "https://uart-spec.example/uart.html#UART_3_2_1"
+                  "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_3_2_1"
                 },
                 {
                   "item_id": "UART_3_2_2",
                   "system": "spec",
-                  "url": "https://uart-spec.example/uart.html#UART_3_2_2"
+                  "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_3_2_2"
                 }
               ],
               "source_template": "uart_baud_{baud}_test, uart_baud_random_test",
@@ -285,7 +285,7 @@
                 {
                   "item_id": "UART_3_2_2",
                   "system": "spec",
-                  "url": "https://uart-spec.example/uart.html#UART_3_2_2"
+                  "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_3_2_2"
                 }
               ],
               "stage": "V2",
@@ -328,7 +328,7 @@
                 {
                   "item_id": "UART_3_2_4",
                   "system": "spec",
-                  "url": "https://uart-spec.example/uart.html#UART_3_2_4"
+                  "url": "https://dvkit.org/covsight/sphinx-covsight/example/spec/uart.html#UART_3_2_4"
                 }
               ],
               "stage": "V2",
