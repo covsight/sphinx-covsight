@@ -1,0 +1,313 @@
+# covsight/sphinx-covsight -- GitHub Actions.
+#
+# COPY THIS AS A PAIR. Its counterpart is .forgejo/workflows/ci.yml. If
+# .forgejo/workflows/ is absent the Forgejo runner falls back to running THIS
+# FILE, under a runner with a different Python, no third-party actions, and no
+# arbitration about which forge ships a release.
+#
+# ---------------------------------------------------------------------------
+# DECISION, 2026-08-30: publish jobs FAIL CLOSED on an unreachable switch.
+#
+# If https://dvkit.org/.well-known/release-authority.json cannot be fetched ON A
+# TAG, the gate fails and nothing publishes. The alternative is a release going
+# to whichever forge happens to guess, and on PyPI a version can be yanked but
+# never reused. A release blocked by an outage is recoverable; a release
+# published twice from two forges is not.
+# ---------------------------------------------------------------------------
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------- gate ----
+  gate:
+    # Release master switch. ONE file, above both platforms, decides who
+    # releases this repo. Generated from sync-policy.toml by
+    # `git-sync emit-release-authority` and published by the cycle that reads
+    # that policy, so GitHub and Forgejo cannot drift -- there is only one copy
+    # for them to disagree about.
+    #
+    # The runner only READS it, over plain HTTPS with no credential: a workflow
+    # file is public and editable by anyone who can push, so nothing secret
+    # goes in one.
+    #
+    # THIS IS A SEPARATE JOB AND HAS TO BE. `if:` on a job cannot reference a
+    # step in its own job, so the switch is resolved here and consumed through
+    # needs.gate.outputs.authority.
+    name: Release authority
+    runs-on: ubuntu-latest
+    outputs:
+      authority: ${{ steps.resolve.outputs.authority }}
+    steps:
+      - id: resolve
+        # The resolver is one line on purpose. A multi-line `python3 -c` script
+        # has to start at column 0, which terminates the YAML block scalar and
+        # silently corrupts the workflow.
+        run: |
+          url=https://dvkit.org/.well-known/release-authority.json
+          if ! body=$(curl -fsS --max-time 10 "$url"); then
+            # Fail CLOSED, but only make noise when a release was actually due:
+            # a red build on every branch push during a dvkit.org outage would
+            # train people to ignore the signal.
+            case "$GITHUB_REF" in
+              refs/tags/v*)
+                echo "::error::release-authority switch unreachable; refusing to publish"
+                exit 1 ;;
+              *)
+                echo "authority=none" >> "$GITHUB_OUTPUT"
+                echo "switch unreachable on a non-tag ref; nothing to release"
+                exit 0 ;;
+            esac
+          fi
+          auth=$(printf '%s' "$body" | python3 -c 'import json,os,sys; d=json.load(sys.stdin); r=os.environ["GITHUB_REPOSITORY"]; print(d["repos"].get(r) or d["orgs"].get(r.split("/")[0]) or d["default"])')
+          echo "release authority for $GITHUB_REPOSITORY: $auth"
+          echo "authority=$auth" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------- test ----
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+        deps: [minimal, all]
+    name: py${{ matrix.python-version }} / ${{ matrix.deps }} deps
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # The minimal leg is what actually proves the optional dependencies are
+      # optional: it installs neither sphinx-systemverilog nor sphinx-peakrdl,
+      # and the backend tests skip themselves.
+      - name: Install (minimal deps)
+        if: matrix.deps == 'minimal'
+        run: pip install -e ".[dev]"
+
+      - name: Install (all extras)
+        if: matrix.deps == 'all'
+        run: pip install -e ".[dev,sv,rdl,docs]"
+
+      - run: pytest --cov=sphinx_covsight --cov-report=term-missing --cov-fail-under=85
+
+  # ---------------------------------------------------------------- lint ----
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: ruff format --check src tests
+      - run: mypy src/
+
+  # ---------------------------------------------------------------- docs ----
+  docs:
+    # BUILD ONLY. This workflow does not publish documentation, by design.
+    #
+    # Docs for every DVKit project are published by FORGEJO. The host-side
+    # poller reads the build artifact from the Forgejo API and deploys with a
+    # Cloudflare token that never enters a job container. A Pages deployment
+    # replaces the WHOLE of dvkit.org, so there is exactly one publisher for it
+    # and it is not here. The job that does it is .forgejo/workflows/docs.yml.
+    #
+    # This job stays because a docs build that breaks should still fail a push,
+    # and because the example-plan checks below are the extension's real
+    # end-to-end test.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev,sv,rdl,docs]"
+
+      - name: Build the example specification
+        run: sphinx-build -W -b html docs/example/spec _build/spec
+
+      - name: The pinned needs.json is current
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          def ids(path):
+              doc = json.loads(pathlib.Path(path).read_text())
+              needs = doc["versions"][doc["current_version"]]["needs"]
+              return {k: v["title"] for k, v in needs.items()}
+          fresh = ids("_build/spec/needs.json")
+          pinned = ids("docs/example/plan/_spec/needs.json")
+          if fresh != pinned:
+              sys.exit("docs/example/plan/_spec/needs.json is stale; re-copy it "
+                       "from the specification build")
+          PY
+
+      - name: Build the example plan
+        run: sphinx-build -W -b html docs/example/plan _build/plan
+
+      - name: The committed plan matches a fresh extraction
+        run: covsight-testplan check docs/example/plan --against docs/example/_golden/testplan.json
+
+      - name: Extraction is byte-stable
+        run: |
+          covsight-testplan build docs/example/plan -o /tmp/a.json
+          covsight-testplan build docs/example/plan -o /tmp/b.json
+          cmp /tmp/a.json /tmp/b.json
+
+      - name: Parallel read matches serial
+        run: |
+          sphinx-build -q -b html docs/example/plan _build/serial
+          sphinx-build -q -j 4 -b html docs/example/plan _build/parallel
+          cmp _build/serial/testplan.json _build/parallel/testplan.json
+
+      - name: Build the documentation
+        run: sphinx-build -W -b html docs _build/docs
+
+  # --------------------------------------------------------------- build ----
+  build:
+    name: Build the distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Stamp the build version
+        # Tag builds keep the clean number. EVERYTHING ELSE gets a PEP 440
+        # local version segment, which PyPI rejects outright -- so an accidental
+        # upload of a CI artifact fails at the tool rather than succeeding
+        # quietly.
+        #
+        #   0.1.0.dev33020374597+gh.g7775f37
+        #              │          │   └─ the commit it was built from
+        #              │          └───── WHICH FORGE. $GITHUB_RUN_ID is not
+        #              │                 unique across them, so the run id alone
+        #              │                 collides.
+        #              └──────────────── the CI run
+        #
+        # `.dev` and not a bare `.<run-id>` because PEP 440 sorts `.dev` BEFORE
+        # the release and the bare form after -- with the bare form a CI build
+        # would outrank the release it was built from.
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/*)
+              echo "tag build -- leaving the version clean"
+              ;;
+            *)
+              stamp=".dev${GITHUB_RUN_ID}+gh.g$(git rev-parse --short=7 HEAD)"
+              echo "stamping $stamp"
+              sed -i 's/^__version__ = "\(.*\)"$/__version__ = "\1'"$stamp"'"/' \
+                src/sphinx_covsight/__init__.py
+              ;;
+          esac
+          grep -n '^__version__' src/sphinx_covsight/__init__.py
+
+      - name: Build sdist and wheel
+        run: |
+          pip install --upgrade pip build twine
+          rm -rf dist/
+          python -m build
+          twine check dist/*
+          ls -la dist/
+
+      - name: The wheel is installable and carries the console script
+        # Against the wheel, not the source tree: what ships has to be what was
+        # checked. The full suite runs from the source tree (it needs
+        # tests/roots/, which is deliberately not packaged), so this is a smoke
+        # test of the artifact itself.
+        run: |
+          python -m venv /tmp/wheelenv
+          /tmp/wheelenv/bin/pip install -q --upgrade pip
+          /tmp/wheelenv/bin/pip install -q "$(ls dist/*.whl)"
+          /tmp/wheelenv/bin/python -c "import sphinx_covsight; print(sphinx_covsight.__version__)"
+          /tmp/wheelenv/bin/covsight-testplan --help > /dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-sphinx-covsight
+          path: dist/*
+          if-no-files-found: error
+
+  # ------------------------------------------------------------- publish ----
+  publish:
+    name: Publish to PyPI
+    # Two conditions, and both matter:
+    #   * a TAG -- a push to a branch never releases anything. This is what
+    #     makes the 5-minute mirror safe: mirroring your work cannot ship it.
+    #   * the switch names THIS forge.
+    #
+    # SKIPS -- does not fail -- when the switch names the other side. A red
+    # build on the dormant side every time anyone tags would train people to
+    # ignore the signal, which is worse than no signal.
+    if: startsWith(github.ref, 'refs/tags/v') && needs.gate.outputs.authority == 'github'
+    needs: [gate, test, lint, docs, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-sphinx-covsight
+          path: dist
+
+      - name: Check the tag IS the version
+        # REQUIRED, not optional. The tag alone determines the published
+        # version, and this is what stops v0.2.0 being tagged while the source
+        # still says 0.1.0 -- which would publish under the wrong number,
+        # unfixably, because a PyPI version can be yanked but never reused.
+        #
+        # Asserts twice on purpose: the SOURCE agrees with the tag, and the
+        # BUILT ARTIFACTS agree with the source. A build that read a stale
+        # version file passes the first check and fails the second.
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          base=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/sphinx_covsight/__init__.py)
+          echo "tag=$tag  source=$base"
+          if [ "$tag" != "$base" ]; then
+            echo "::error::tag v$tag does not match __version__ $base"
+            exit 1
+          fi
+          for f in dist/*; do
+            case "$(basename "$f")" in
+              sphinx_covsight-${base}-*.whl|sphinx_covsight-${base}.tar.gz) ;;
+              *) echo "::error::artifact $(basename "$f") is not version ${base}"; exit 1 ;;
+            esac
+          done
+          echo "OK: tag, source version and every artifact agree on ${base}"
+
+      - name: Publish
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [ -z "$TWINE_PASSWORD" ]; then
+            echo "::error::PYPI_API_TOKEN is not visible to this repository"
+            exit 1
+          fi
+          pip install --upgrade twine
+          twine check dist/*
+          # Idempotence net: with one switch and two possible publishers, a
+          # double-fire must be a no-op rather than a failure or a corruption.
+          twine upload --non-interactive --skip-existing dist/*

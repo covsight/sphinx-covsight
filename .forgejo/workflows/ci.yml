@@ -1,0 +1,219 @@
+# covsight/sphinx-covsight -- Forgejo Actions.
+#
+# COPY THIS AS A PAIR. Its counterpart is .github/workflows/ci.yml. The two are
+# near-identical and differ in exactly two things: the `authority ==`
+# comparison, and the runner constraints below. If you are changing anything
+# else, they are drifting.
+#
+# ---------------------------------------------------------------------------
+# DECISION, 2026-08-30: publish jobs FAIL CLOSED on an unreachable switch.
+#
+# If https://dvkit.org/.well-known/release-authority.json cannot be fetched ON A
+# TAG, the gate fails and nothing publishes. A release blocked by an outage is
+# recoverable; a release published twice from two forges is not.
+# ---------------------------------------------------------------------------
+#
+# FORGEJO RUNNER CONSTRAINTS -- measured on this instance, not assumed.
+# `runs-on: ubuntu-latest` maps to catthehacker/ubuntu:act-22.04.
+#
+#   * Python is 3.10 and pip is 22.0.2 -- which PREDATES PEP 660, so
+#     `pip install -e .` fails outright on a pyproject-only project. Build a
+#     wheel and install that; it is also the more honest test, because what is
+#     tested is then what would ship.
+#   * `python` unqualified DOES NOT EXIST. Use python3.
+#   * NO THIRD-PARTY ACTIONS. A bare `uses:` resolves against code.forgejo.org,
+#     not github.com -- so actions/setup-python and pypa/gh-action-pypi-publish
+#     are unavailable. Publishing is plain twine, which also keeps GitHub off
+#     the critical path of a release. actions/checkout and
+#     forgejo/{upload,download}-artifact DO resolve.
+#
+# Python 3.10 is also this package's floor (pyproject requires-python), so the
+# image needs nothing installed to reach it.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------- gate ----
+  gate:
+    # Release master switch. Identical to the GitHub side except for what the
+    # publish job compares the answer against. `if:` on a job cannot reference a
+    # step in its own job, so the switch is resolved here and consumed through
+    # needs.gate.outputs.authority.
+    name: Release authority
+    runs-on: ubuntu-latest
+    outputs:
+      authority: ${{ steps.resolve.outputs.authority }}
+    steps:
+      - id: resolve
+        # One line on purpose: a multi-line `python3 -c` has to start at column
+        # 0, which terminates the YAML block scalar and silently corrupts the
+        # workflow.
+        run: |
+          url=https://dvkit.org/.well-known/release-authority.json
+          if ! body=$(curl -fsS --max-time 10 "$url"); then
+            case "$GITHUB_REF" in
+              refs/tags/v*)
+                echo "::error::release-authority switch unreachable; refusing to publish"
+                exit 1 ;;
+              *)
+                echo "authority=none" >> "$GITHUB_OUTPUT"
+                echo "switch unreachable on a non-tag ref; nothing to release"
+                exit 0 ;;
+            esac
+          fi
+          auth=$(printf '%s' "$body" | python3 -c 'import json,os,sys; d=json.load(sys.stdin); r=os.environ["GITHUB_REPOSITORY"]; print(d["repos"].get(r) or d["orgs"].get(r.split("/")[0]) or d["default"])')
+          echo "release authority for $GITHUB_REPOSITORY: $auth"
+          echo "authority=$auth" >> "$GITHUB_OUTPUT"
+
+  # --------------------------------------------------------------- build ----
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for internal identifiers in tracked files
+        # This repo is published to git.dvkit.org and mirrored to GitHub, so
+        # anything committed here is public. Internal host names, tailnet
+        # addresses and CGNAT-range IPs must not appear in tracked files -- if a
+        # build ever needs one, it belongs in a repository secret, which is
+        # masked in logs.
+        run: |
+          pattern='perch-char\.ts\.net|\.ts\.net|a9550|100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]+\.[0-9]+'
+          # The pattern is itself a match, and it appears in every file in this
+          # directory -- so the directory as a whole is excluded, not just this
+          # file. Excluding only this file is the easy mistake: it makes the
+          # check fail on its own sibling.
+          if git grep -nIE "$pattern" -- . ':!.forgejo/workflows' ; then
+            echo "::error::internal identifier found in a tracked file (see matches above)"
+            exit 1
+          fi
+          echo "OK: no internal identifiers in tracked files"
+
+      - name: Stamp the build version
+        # Tag builds keep the clean number. Everything else gets a PEP 440 local
+        # version segment, which PyPI rejects outright.
+        #
+        #   0.1.0.dev12+fj.g7775f37
+        #            │   └─ WHICH FORGE. $GITHUB_RUN_ID is NOT unique across
+        #            │      them: GitHub's is an 11-digit global counter,
+        #            │      Forgejo's a per-repo index that restarts if the
+        #            │      instance is rebuilt. Without the platform tag the
+        #            │      two collide.
+        #            └───── the CI run
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/*)
+              echo "tag build -- leaving the version clean"
+              ;;
+            *)
+              stamp=".dev${GITHUB_RUN_ID}+fj.g$(git rev-parse --short=7 HEAD)"
+              echo "stamping $stamp"
+              sed -i 's/^__version__ = "\(.*\)"$/__version__ = "\1'"$stamp"'"/' \
+                src/sphinx_covsight/__init__.py
+              ;;
+          esac
+          grep -n '^__version__' src/sphinx_covsight/__init__.py
+
+      - name: Build sdist and wheel
+        # A venv rather than the system interpreter: the image's pip is 22.0.2
+        # and predates PEP 660. Upgrading pip inside a venv is cheap and keeps
+        # the image's own python untouched.
+        run: |
+          python3 -m venv /tmp/buildenv
+          /tmp/buildenv/bin/pip install -q --upgrade pip build twine
+          rm -rf dist/
+          /tmp/buildenv/bin/python -m build .
+          /tmp/buildenv/bin/twine check dist/*
+          ls -la dist/
+
+      - name: Test against the built wheel
+        # Against the wheel, not the source tree: what is tested has to be what
+        # would ship. The suite still runs FROM the source tree because
+        # tests/roots/ is deliberately not packaged -- but `import
+        # sphinx_covsight` resolves to the installed wheel, because this project
+        # uses a src/ layout and nothing puts src/ on sys.path.
+        #
+        # The optional citation backends (sphinx-systemverilog, sphinx-peakrdl)
+        # are NOT installed here. That is the point: their tests skip, and this
+        # leg proves a plan builds and extracts without them. The GitHub matrix
+        # covers the all-extras leg.
+        run: |
+          python3 -m venv /tmp/testenv
+          /tmp/testenv/bin/pip install -q --upgrade pip
+          /tmp/testenv/bin/pip install -q pytest pytest-cov jsonschema myst-parser sphinx-needs furo
+          /tmp/testenv/bin/pip install -q "$(ls dist/*.whl)"
+          /tmp/testenv/bin/python -m pytest -q
+
+      - name: Upload distributions
+        uses: forgejo/upload-artifact@v4
+        with:
+          name: dist-sphinx-covsight
+          path: dist/*
+          if-no-files-found: error
+
+  # ------------------------------------------------------------- publish ----
+  publish-pypi:
+    # A TAG, and the switch naming THIS forge. A push to a branch never releases
+    # anything -- that is what makes the 5-minute sync safe.
+    #
+    # SKIPS -- does not fail -- when the switch names GitHub, which is where
+    # this repo's authority currently sits.
+    if: startsWith(github.ref, 'refs/tags/v') && needs.gate.outputs.authority == 'forgejo'
+    needs: [gate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download distributions
+        uses: forgejo/download-artifact@v4
+        with:
+          name: dist-sphinx-covsight
+          path: dist
+
+      - name: Check the tag IS the version
+        # Asserts twice on purpose: the SOURCE agrees with the tag, and the
+        # BUILT ARTIFACTS agree with the source. A build that read a stale
+        # version file passes the first check and fails the second.
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          base=$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/sphinx_covsight/__init__.py)
+          echo "tag=$tag  source=$base"
+          if [ "$tag" != "$base" ]; then
+            echo "::error::tag v$tag does not match __version__ $base"
+            exit 1
+          fi
+          for f in dist/*; do
+            case "$(basename "$f")" in
+              sphinx_covsight-${base}-*.whl|sphinx_covsight-${base}.tar.gz) ;;
+              *) echo "::error::artifact $(basename "$f") is not version ${base}"; exit 1 ;;
+            esac
+          done
+          echo "OK: tag, source version and every artifact agree on ${base}"
+
+      - name: Publish to PyPI
+        # Plain twine rather than a third-party action -- which is not available
+        # here anyway, and which would also put GitHub on the critical path of a
+        # release. PYPI_API_TOKEN is an organization secret.
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          if [ -z "$TWINE_PASSWORD" ]; then
+            echo "::error::PYPI_API_TOKEN is not visible to this repository"
+            exit 1
+          fi
+          python3 -m venv /tmp/twineenv
+          /tmp/twineenv/bin/pip install -q --upgrade pip twine
+          /tmp/twineenv/bin/twine check dist/*
+          /tmp/twineenv/bin/twine upload --non-interactive --skip-existing dist/*
+          echo "published $(ls dist/ | wc -l) artifact(s)"
