@@ -1,0 +1,42 @@
+// UART register map.
+//
+// The plan cites fields here with `rdl:` so that "the divisor" in the plan and
+// "the divisor" in the register map are the same object, not two strings that
+// happen to look alike.
+
+addrmap uart {
+    name = "UART";
+    desc = "Register map for the example UART.";
+
+    reg {
+        name = "Control";
+        desc = "Link configuration.  Writable while the link is idle.";
+
+        field {
+            name = "Baud divisor";
+            desc = "Clock divisor used to derive the bit clock.";
+            sw = rw; hw = r;
+        } BAUD_DIV[15:0] = 16'd434;
+
+        field {
+            name = "Parity enable";
+            desc = "When set, a parity bit is generated and checked.";
+            sw = rw; hw = r;
+        } PARITY_EN[16:16] = 1'b0;
+    } CTRL @ 0x0;
+
+    reg {
+        name = "Status";
+        desc = "Link state.  Read-only.";
+
+        field {
+            name = "Transmitter busy";
+            sw = r; hw = w;
+        } TX_BUSY[0:0];
+
+        field {
+            name = "Receive FIFO full";
+            sw = r; hw = w;
+        } RX_FULL[1:1];
+    } STATUS @ 0x4;
+};

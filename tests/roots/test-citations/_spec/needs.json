@@ -1,0 +1,29 @@
+{
+  "created": "2026-01-01T00:00:00",
+  "current_version": "1.0",
+  "project": "uart-spec",
+  "versions": {
+    "1.0": {
+      "needs": {
+        "UART_1_1_1": {
+          "id": "UART_1_1_1",
+          "type": "rule",
+          "title": "Start bit qualification",
+          "docname": "uart",
+          "lineno": 12,
+          "status": "approved",
+          "content": "The receiver **shall** re-sample the start bit at the half-bit point."
+        },
+        "UART_3_2_1": {
+          "id": "UART_3_2_1",
+          "type": "rule",
+          "title": "Divisor programmability",
+          "docname": "uart",
+          "lineno": 30,
+          "status": "approved",
+          "content": "The divisor **shall** be writable while the link is idle."
+        }
+      }
+    }
+  }
+}

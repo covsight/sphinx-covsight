@@ -1,0 +1,77 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sphinx-covsight"
+dynamic = ["version"]
+description = "Author verification plans as Sphinx documents and extract covsight testplan v1"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Matthew Ballance" }]
+keywords = ["sphinx", "verification", "testplan", "coverage", "covsight"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Sphinx :: Extension",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Documentation :: Sphinx",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
+dependencies = [
+    "sphinx>=7.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+myst = ["myst-parser>=2.0"]
+sv = ["sphinx-systemverilog"]
+rdl = ["sphinx-peakrdl"]
+docs = ["myst-parser>=2.0", "sphinx-needs", "sphinx-systemverilog", "sphinx-peakrdl", "furo"]
+dev = [
+    "myst-parser>=2.0",
+    "sphinx-needs",
+    "pytest>=7.0",
+    "pytest-cov",
+    "jsonschema",
+    "ruff",
+    "mypy",
+]
+
+[project.scripts]
+covsight-testplan = "sphinx_covsight.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/covsight/sphinx-covsight"
+Documentation = "https://dvkit.org/covsight/sphinx-covsight/"
+Source = "https://github.com/covsight/sphinx-covsight"
+Issues = "https://github.com/covsight/sphinx-covsight/issues"
+
+[tool.hatch.version]
+path = "src/sphinx_covsight/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sphinx_covsight"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.mypy]
+# No python_version pin: mypy parses the installed Sphinx sources, which use
+# syntax newer than the minimum version this package supports.
+warn_unused_ignores = false
+ignore_missing_imports = true

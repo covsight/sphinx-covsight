@@ -1,0 +1,363 @@
+{
+  "description": "Verification plan for the example UART.",
+  "format_version": 1,
+  "goals": [
+    {
+      "custom": {
+        "covsight": {
+          "requirements": [
+            {
+              "item_id": "UART_1_1_1",
+              "system": "spec",
+              "url": "https://uart-spec.example/uart.html#UART_1_1_1"
+            },
+            {
+              "item_id": "UART_1_1_2",
+              "system": "spec",
+              "url": "https://uart-spec.example/uart.html#UART_1_1_2"
+            },
+            {
+              "item_id": "UART_1_1_3",
+              "system": "spec",
+              "url": "https://uart-spec.example/uart.html#UART_1_1_3"
+            }
+          ]
+        }
+      },
+      "desc": "A character is one start bit, eight data bits least-significant bit first, an\noptional parity bit and one stop bit.  The receiver qualifies the start bit at\nthe half-bit point, so a glitch shorter than half a bit period must not begin\nreception.",
+      "goals": [
+        {
+          "custom": {
+            "covsight": {
+              "approach": "Boundary UVCs, directed sequences, constrained-random stimulus, assertions, and a reference model targeting Character framing.",
+              "coverage_score": 8,
+              "difficulty": 3,
+              "env": "ip_simulation",
+              "exit_criteria": [
+                "100% regression pass for all planned tests",
+                "95%+ functional coverage for implemented scope",
+                "100% assertion pass"
+              ],
+              "overall_score": 64,
+              "reasoning": "Provides controllability and observability for timing and data bug classes at practical regression run time.",
+              "scope": "block"
+            }
+          },
+          "id": "FEAT-001.ip_simulation",
+          "testpoints": [
+            {
+              "coverage": [
+                {
+                  "path": "uart_env.uart_cfg_cg",
+                  "type": "covergroup"
+                },
+                {
+                  "path": "uart_env.uart_cfg_cg.parity_cp",
+                  "type": "coverpoint"
+                }
+              ],
+              "custom": {
+                "covsight": {
+                  "env": "ip_simulation",
+                  "feature": "FEAT-001",
+                  "title": "Start bit qualification"
+                }
+              },
+              "desc": "Drive a falling edge on RX and confirm a character begins; drive a glitch\nshorter than half a bit period and confirm none does.  Both polarities of the\nline at the sampling instant are checked.",
+              "name": "FEAT-001.tp_start_bit",
+              "priority": "high",
+              "requirements": [
+                {
+                  "item_id": "UART_1_1_1",
+                  "system": "spec",
+                  "url": "https://uart-spec.example/uart.html#UART_1_1_1"
+                }
+              ],
+              "stage": "V1",
+              "tags": [
+                "smoke"
+              ],
+              "tests": [
+                "uart_framing_test",
+                "uart_smoke_test"
+              ]
+            },
+            {
+              "coverage": [
+                {
+                  "path": "uart_env.uart_cfg_cg.parity_cp",
+                  "type": "coverpoint"
+                },
+                {
+                  "path": "uart_env.uart_cfg_cg.cfg_x",
+                  "type": "cross"
+                }
+              ],
+              "custom": {
+                "covsight": {
+                  "env": "ip_simulation",
+                  "feature": "FEAT-001",
+                  "title": "Parity generation and checking"
+                }
+              },
+              "desc": "Sweep both parity polarities against random payloads and confirm the generated\nparity bit and the receiver's error reporting agree with the specification.\nThe parity mode is programmed through the {rdl:doc-ref}`uart.CTRL` register.",
+              "name": "FEAT-001.tp_parity",
+              "priority": "medium",
+              "requirements": [
+                {
+                  "item_id": "uart.CTRL.PARITY_EN",
+                  "system": "rdl",
+                  "url": "peakrdl-html/index.html?p=uart.CTRL#PARITY_EN"
+                },
+                {
+                  "item_id": "UART_1_2_1",
+                  "system": "spec",
+                  "url": "https://uart-spec.example/uart.html#UART_1_2_1"
+                },
+                {
+                  "item_id": "UART_1_2_2",
+                  "system": "spec",
+                  "url": "https://uart-spec.example/uart.html#UART_1_2_2"
+                },
+                {
+                  "item_id": "uart_pkg::uart_cfg::uart_cfg_cg",
+                  "system": "sv",
+                  "url": "testbench.html#sv-uart_pkg-uart_cfg-uart_cfg_cg"
+                }
+              ],
+              "stage": "V2",
+              "tests": [
+                "uart_parity_test"
+              ]
+            }
+          ],
+          "title": "IP Simulation"
+        },
+        {
+          "custom": {
+            "covsight": {
+              "approach": "Bounded and unbounded property proofs over Character framing, with assumptions reviewed against the specification.",
+              "coverage_score": 4,
+              "difficulty": 6,
+              "env": "formal",
+              "exit_criteria": [
+                "All properties proven or bounded to a justified depth",
+                "No unreviewed assumptions"
+              ],
+              "overall_score": 20,
+              "reasoning": "Exhaustive over the property's cone of influence, which simulation cannot be for control-path corner cases.",
+              "scope": "block"
+            }
+          },
+          "id": "FEAT-001.formal",
+          "testpoints": [
+            {
+              "custom": {
+                "covsight": {
+                  "env": "formal",
+                  "feature": "FEAT-001",
+                  "title": "Stop bit framing error is always reported"
+                }
+              },
+              "desc": "Prove that a low stop bit always raises a framing error within one bit period,\nfor every payload and every parity setting.",
+              "name": "FEAT-001.tp_framing_error",
+              "requirements": [
+                {
+                  "item_id": "UART_1_1_3",
+                  "system": "spec",
+                  "url": "https://uart-spec.example/uart.html#UART_1_1_3"
+                }
+              ],
+              "stage": "V2",
+              "tests": [
+                "uart_framing_error_props"
+              ]
+            }
+          ],
+          "title": "Formal"
+        }
+      ],
+      "id": "FEAT-001",
+      "owner": "uart-verification",
+      "tags": [
+        "framing",
+        "uart"
+      ],
+      "title": "Character framing"
+    },
+    {
+      "custom": {
+        "covsight": {
+          "requirements": [
+            {
+              "item_id": "uart.CTRL.BAUD_DIV",
+              "system": "rdl",
+              "url": "peakrdl-html/index.html?p=uart.CTRL#BAUD_DIV"
+            },
+            {
+              "item_id": "UART_3_2_1",
+              "system": "spec",
+              "url": "https://uart-spec.example/uart.html#UART_3_2_1"
+            },
+            {
+              "item_id": "UART_3_2_2",
+              "system": "spec",
+              "url": "https://uart-spec.example/uart.html#UART_3_2_2"
+            }
+          ]
+        }
+      },
+      "desc": "The transmitter and receiver derive their bit clock from a programmable\ndivisor.  The divisor is writable while the link is idle and takes effect at\nthe next character boundary.",
+      "goals": [
+        {
+          "custom": {
+            "covsight": {
+              "approach": "Boundary UVCs, directed sequences, constrained-random stimulus, assertions, and a reference model targeting Baud rate generation.",
+              "coverage_score": 8,
+              "difficulty": 3,
+              "env": "ip_simulation",
+              "exit_criteria": [
+                "100% regression pass for all planned tests",
+                "95%+ functional coverage for implemented scope",
+                "100% assertion pass"
+              ],
+              "overall_score": 64,
+              "reasoning": "Provides controllability and observability for timing and data bug classes at practical regression run time.",
+              "scope": "block"
+            }
+          },
+          "id": "FEAT-002.ip_simulation",
+          "testpoints": [
+            {
+              "coverage": [
+                {
+                  "path": "uart_env.uart_cfg_cg",
+                  "type": "covergroup"
+                },
+                {
+                  "path": "uart_env.uart_cfg_cg.baud_div_cp",
+                  "type": "coverpoint"
+                }
+              ],
+              "custom": {
+                "covsight": {
+                  "env": "ip_simulation",
+                  "feature": "FEAT-002",
+                  "title": "All supported divisor values"
+                }
+              },
+              "desc": "Sweep the divisor across every supported baud rate and confirm bit\ntiming at each, including the boundary values 2 and 65535.",
+              "name": "FEAT-002.tp_divisors",
+              "priority": "high",
+              "requirements": [
+                {
+                  "item_id": "UART_3_2_1",
+                  "system": "spec",
+                  "url": "https://uart-spec.example/uart.html#UART_3_2_1"
+                },
+                {
+                  "item_id": "UART_3_2_2",
+                  "system": "spec",
+                  "url": "https://uart-spec.example/uart.html#UART_3_2_2"
+                }
+              ],
+              "source_template": "uart_baud_{baud}_test, uart_baud_random_test",
+              "stage": "V2",
+              "tests": [
+                "uart_baud_9600_test",
+                "uart_baud_115200_test",
+                "uart_baud_460800_test",
+                "uart_baud_random_test"
+              ]
+            },
+            {
+              "custom": {
+                "covsight": {
+                  "env": "ip_simulation",
+                  "feature": "FEAT-002",
+                  "title": "Divisor below the supported minimum is clamped"
+                }
+              },
+              "desc": "Program divisors of 0 and 1 and confirm the bit clock matches a\ndivisor of 2, per :rule:`UART_3_2_2`.",
+              "name": "FEAT-002.tp_divisor_clamp",
+              "priority": "low",
+              "requirements": [
+                {
+                  "item_id": "UART_3_2_2",
+                  "system": "spec",
+                  "url": "https://uart-spec.example/uart.html#UART_3_2_2"
+                }
+              ],
+              "stage": "V2",
+              "tests": [
+                "uart_baud_clamp_test"
+              ]
+            }
+          ],
+          "title": "IP Simulation"
+        },
+        {
+          "custom": {
+            "covsight": {
+              "approach": "Bounded and unbounded property proofs over Baud rate generation, with assumptions reviewed against the specification.",
+              "coverage_score": 4,
+              "difficulty": 6,
+              "env": "formal",
+              "exit_criteria": [
+                "All properties proven or bounded to a justified depth",
+                "No unreviewed assumptions"
+              ],
+              "overall_score": 20,
+              "reasoning": "Exhaustive over the property's cone of influence, which simulation cannot be for control-path corner cases.",
+              "scope": "block"
+            }
+          },
+          "id": "FEAT-002.formal",
+          "testpoints": [
+            {
+              "custom": {
+                "covsight": {
+                  "env": "formal",
+                  "feature": "FEAT-002",
+                  "title": "Divisor write during active transfer is ignored"
+                }
+              },
+              "desc": "Prove that a write to the divisor while a character is in flight does\nnot change the bit clock until the character completes.",
+              "name": "FEAT-002.tp_divisor_locked",
+              "requirements": [
+                {
+                  "item_id": "UART_3_2_4",
+                  "system": "spec",
+                  "url": "https://uart-spec.example/uart.html#UART_3_2_4"
+                }
+              ],
+              "stage": "V2",
+              "tests": [
+                "uart_baud_lock_props"
+              ]
+            }
+          ],
+          "title": "Formal"
+        }
+      ],
+      "id": "FEAT-002",
+      "owner": "uart-verification",
+      "tags": [
+        "baud",
+        "uart"
+      ],
+      "title": "Baud rate generation"
+    }
+  ],
+  "imports": [],
+  "name": "uart",
+  "owner": "uart-verification",
+  "schema": "https://schema.covsight.io/testplan/v1",
+  "substitutions": {
+    "baud": [
+      "9600",
+      "115200",
+      "460800"
+    ]
+  }
+}

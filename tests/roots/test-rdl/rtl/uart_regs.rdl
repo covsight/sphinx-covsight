@@ -1,0 +1,23 @@
+addrmap uart {
+    name = "UART register map";
+    desc = "Control and status registers for the UART.";
+
+    reg {
+        name = "Control";
+        field {
+            name = "Baud divisor";
+            desc = "Clock divisor used to derive the bit clock.";
+            sw = rw; hw = r;
+        } BAUD_DIV[15:0] = 16'd434;
+        field {
+            name = "Parity enable";
+            sw = rw; hw = r;
+        } PARITY_EN[16:16] = 1'b0;
+    } CTRL @ 0x0;
+
+    reg {
+        name = "Status";
+        field { sw = r; hw = w; } TX_BUSY[0:0];
+        field { sw = r; hw = w; } RX_FULL[1:1];
+    } STATUS @ 0x4;
+};

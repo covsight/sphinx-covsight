@@ -1,0 +1,33 @@
+/* Presentation for the sphinx-covsight authoring directives. */
+
+.covsight.admonition {
+    border-left: 4px solid #4a6fa5;
+    padding: 0.6em 1em;
+    margin: 1em 0;
+}
+
+.covsight.covsight-feature {
+    border-left-color: #2f4f7f;
+}
+
+.covsight.covsight-env {
+    border-left-color: #4a8f6f;
+}
+
+.covsight.covsight-testpoint {
+    border-left-color: #a5814a;
+}
+
+.covsight .covsight-fields {
+    font-size: 90%;
+    margin: 0.4em 0;
+}
+
+.covsight-rubric {
+    font-size: 95%;
+    margin-bottom: 0.2em;
+}
+
+.covsight-citation {
+    white-space: nowrap;
+}
